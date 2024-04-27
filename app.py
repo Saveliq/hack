@@ -3,12 +3,24 @@ import paho.mqtt.client as mqtt
 import psycopg2
 from datetime import datetime, timezone
 import os
+import logging
 DBName = os.environ['DBName']
 DBPassword = os.environ['DBPassword']
 add_metric = 'INSERT INTO "CollectedMetrics" ("TransmitterMAC", "Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxide", "Collected") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);'
 
 update_user = 'UPDATE "Devices" SET "OwnerId"=%s, "PositionLatitude"=%s, "PositionAltitude"=%s WHERE "MAC"=%s;'
-
+def get_module_logger(mod_name):
+    """
+    To use this, do logger = get_module_logger(__name__)
+    """
+    logger = logging.getLogger(mod_name)
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        '%(asctime)s [%(name)-12s] %(levelname)-8s %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    return logger
 
 def connect_db():
     try:
@@ -17,16 +29,16 @@ def connect_db():
                                       host="orcl.unicorns-group.ru",
                                       port="9007",
                                       database="homeatis")
-        print("Успешное подключение к БД")
+        get_module_logger(__name__).info("Успешное подключение к БД")
         return connection, connection.cursor()
     except (Exception, psycopg2.Error) as error:
-        print(error)
+        get_module_logger(__name__).info(error)
         return None, None
 
 
 cursor = None
 connect = None
-
+logger = None
 
 def run():
     def device_handler(msg):
@@ -45,7 +57,7 @@ def run():
             cursor.execute(add_metric, list(data.values()))
             connect.commit()
         except (Exception, psycopg2.Error) as error:
-            print(f"Ошибка при добавлении метрик {error}")
+            get_module_logger(__name__).info(f"Ошибка при добавлении метрик {error}")
 
     def register_handler(msg):
         data = {}
@@ -65,14 +77,14 @@ def run():
         data["MAC"] = msg.topic.split("/")[1]
 
         try:
-            print(data)
+            # print(data)
             cursor.execute(update_user, list(data.values()))
             connect.commit()
         except (Exception, psycopg2.Error) as error:
-            print(f"Ошибка при обновлении данных пользователя {error}")
+            get_module_logger(__name__).info(f"Ошибка при обновлении данных пользователя {error}")
 
     def on_connect(client, userdata, flags, reason_code, properties):
-        print(f"Connected with result code {reason_code}")
+        get_module_logger(__name__).info(f"Connected with result code {reason_code}")
         client.subscribe("device/#")
         client.subscribe("register/#")
 
