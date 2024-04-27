@@ -1,9 +1,10 @@
 import json
-
 import paho.mqtt.client as mqtt
 import psycopg2
 from datetime import datetime, timezone
-
+import os
+DBName = os.environ['DBName']
+DBPassword = os.environ['DBPassword']
 add_metric = 'INSERT INTO "CollectedMetrics" ("TransmitterMAC", "Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxide", "Collected") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);'
 
 update_user = 'UPDATE "Devices" SET "OwnerId"=%s, "PositionLatitude"=%s, "PositionAltitude"=%s WHERE "MAC"=%s;'
@@ -11,8 +12,8 @@ update_user = 'UPDATE "Devices" SET "OwnerId"=%s, "PositionLatitude"=%s, "Positi
 
 def connect_db():
     try:
-        connection = psycopg2.connect(user="admin",
-                                      password="ADMINATIS!",
+        connection = psycopg2.connect(user=DBName,
+                                      password=DBPassword,
                                       host="orcl.unicorns-group.ru",
                                       port="9007",
                                       database="homeatis")
@@ -89,6 +90,7 @@ def run():
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttc.on_connect = on_connect
     mqttc.on_message = on_message
+    mqttc.username_pw_set(DBName, DBPassword)
     mqttc.connect("orcl.unicorns-group.ru", 1883, 60)
 
     mqttc.loop_forever()
