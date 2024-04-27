@@ -4,22 +4,29 @@ import psycopg2
 from datetime import datetime, timezone
 import os
 import logging
+import sys
 DBName = os.environ['DBName']
 DBPassword = os.environ['DBPassword']
 add_metric = 'INSERT INTO "CollectedMetrics" ("TransmitterMAC", "Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxide", "Collected") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);'
 
 update_user = 'UPDATE "Devices" SET "OwnerId"=%s, "PositionLatitude"=%s, "PositionAltitude"=%s WHERE "MAC"=%s;'
-def get_module_logger(mod_name):
+def my_custom_logger(logger_name, level=logging.DEBUG):
     """
-    To use this, do logger = get_module_logger(__name__)
+    Method to return a custom logger with the given name and level
     """
-    logger = logging.getLogger(mod_name)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        '%(asctime)s [%(name)-12s] %(levelname)-8s %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(level)
+    format_string = ("%(asctime)s — %(name)s — %(levelname)s — %(funcName)s:"
+                    "%(lineno)d — %(message)s")
+    log_format = logging.Formatter(format_string)
+    # Creating and adding the console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(log_format)
+    logger.addHandler(console_handler)
+    # Creating and adding the file handler
+    file_handler = logging.FileHandler(logger_name, mode='a')
+    file_handler.setFormatter(log_format)
+    logger.addHandler(file_handler)
     return logger
 
 def connect_db():
@@ -65,12 +72,13 @@ def run():
                 c.execute(add_metric, list(data.values()))
             except (Exception, psycopg2.Error) as error:
                 # logger.info(f"Ошибка при обновлении данных пользователя {error}")
-                get_module_logger(__name__).info(f"Ошибка при добавлении метрик {error}, data={data}")
+                logger.debug(f"Ошибка при добавлении метрик {error}, data={data}")
         connect.commit()
 
     def register_handler(msg):
         global logger
         global connect
+        global logger
         data = {}
         msg_data = json.loads(msg.payload)
         try:
@@ -90,7 +98,7 @@ def run():
             try:
                 c.execute(update_user, list(data.values()))
             except (Exception, psycopg2.Error) as error:
-                get_module_logger(__name__).info(f"Ошибка при обновлении данных пользователя {error}, data={data}")
+                logger.debug(f"Ошибка при обновлении данных пользователя {error}, data={data}")
         connect.commit()
 
     def on_message(client, userdata, msg):
@@ -104,7 +112,8 @@ def run():
             device_handler(msg)
         elif "register" in msg.topic:
             register_handler(msg)
-
+    global logger
+    logger = my_custom_logger(f"Logger")
     connect, cursor = connect_db()
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttc.on_connect = on_connect
