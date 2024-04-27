@@ -70,8 +70,7 @@ def run():
                 c.execute(add_metric, list(data.values()))
                 connect.commit()
             except (Exception, psycopg2.Error) as error:
-                # logger.info(f"Ошибка при обновлении данных пользователя {error}")
-                connect.close()
+                connect.rollback()
                 logger.debug(f"Ошибка при добавлении метрик {error}, data={data}")
 
 
@@ -95,8 +94,9 @@ def run():
             try:
                 c.execute(update_user, list(data.values()))
                 connect.commit()
+
             except (Exception, psycopg2.Error) as error:
-                connect.close()
+                connect.rollback()
                 logger.debug(f"Ошибка при обновлении данных пользователя {error}, data={data}")
 
     def on_message(client, userdata, msg):
@@ -111,6 +111,8 @@ def run():
         elif "register" in msg.topic:
             register_handler(msg)
     global logger
+    global cursor
+    global connect
     logger = my_custom_logger(f"Logger")
     connect, cursor = connect_db()
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
