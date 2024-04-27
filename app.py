@@ -54,8 +54,6 @@ def run():
 
 
     def device_handler(msg):
-        global logger
-
         # Ключи для метрик
         keys = ["Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxyde"]
 
@@ -76,9 +74,6 @@ def run():
         connect.commit()
 
     def register_handler(msg):
-        global logger
-        global connect
-        global logger
         data = {}
         msg_data = json.loads(msg.payload)
         try:
