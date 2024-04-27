@@ -29,10 +29,10 @@ def connect_db():
                                       host="orcl.unicorns-group.ru",
                                       port="9007",
                                       database="homeatis")
-        get_module_logger(__name__).info("Успешное подключение к БД")
+        # get_module_logger(__name__).info("Успешное подключение к БД")
         return connection, connection.cursor()
     except (Exception, psycopg2.Error) as error:
-        get_module_logger(__name__).info(error)
+        # get_module_logger(__name__).info(error)
         return None, None
 
 
@@ -41,7 +41,14 @@ connect = None
 logger = None
 
 def run():
+    def on_connect(client, userdata, flags, reason_code, properties):
+        client.subscribe("device/#")
+        client.subscribe("register/#")
+
+
     def device_handler(msg):
+        global logger
+
         # Ключи для метрик
         keys = ["Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxyde"]
 
@@ -53,13 +60,17 @@ def run():
             except:
                 data[arg] = None
         data["Collected"] = str(datetime.now(timezone.utc))
-        try:
-            cursor.execute(add_metric, list(data.values()))
-            connect.commit()
-        except (Exception, psycopg2.Error) as error:
-            get_module_logger(__name__).info(f"Ошибка при добавлении метрик {error}")
+        with connect.cursor() as c:
+            try:
+                c.execute(add_metric, list(data.values()))
+            except (Exception, psycopg2.Error) as error:
+                # logger.info(f"Ошибка при обновлении данных пользователя {error}")
+                get_module_logger(__name__).info(f"Ошибка при добавлении метрик {error}, data={data}")
+        connect.commit()
 
     def register_handler(msg):
+        global logger
+        global connect
         data = {}
         msg_data = json.loads(msg.payload)
         try:
@@ -75,25 +86,21 @@ def run():
             except:
                 data[arg] = None
         data["MAC"] = msg.topic.split("/")[1]
-
-        try:
-            # print(data)
-            cursor.execute(update_user, list(data.values()))
-            connect.commit()
-        except (Exception, psycopg2.Error) as error:
-            get_module_logger(__name__).info(f"Ошибка при обновлении данных пользователя {error}")
-
-    def on_connect(client, userdata, flags, reason_code, properties):
-        get_module_logger(__name__).info(f"Connected with result code {reason_code}")
-        client.subscribe("device/#")
-        client.subscribe("register/#")
+        with connect.cursor() as c:
+            try:
+                c.execute(update_user, list(data.values()))
+            except (Exception, psycopg2.Error) as error:
+                get_module_logger(__name__).info(f"Ошибка при обновлении данных пользователя {error}, data={data}")
+        connect.commit()
 
     def on_message(client, userdata, msg):
         global connect
         global cursor
         if not connect:
             connect, cursor = connect_db()
-        if "device id" in msg.topic:
+        if not cursor:
+            cursor = connect.cursor()
+        if "device" in msg.topic:
             device_handler(msg)
         elif "register" in msg.topic:
             register_handler(msg)
