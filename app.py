@@ -54,8 +54,6 @@ def run():
 
 
     def device_handler(msg):
-        global logger
-
         # Ключи для метрик
         keys = ["Temp", "Humidity", "Pressure", "Height", "AirPollutionS", "AirPollutionL", "CarbonMonoOxyde"]
 
@@ -70,15 +68,14 @@ def run():
         with connect.cursor() as c:
             try:
                 c.execute(add_metric, list(data.values()))
+                connect.commit()
             except (Exception, psycopg2.Error) as error:
                 # logger.info(f"Ошибка при обновлении данных пользователя {error}")
+                connect.close()
                 logger.debug(f"Ошибка при добавлении метрик {error}, data={data}")
-        connect.commit()
+
 
     def register_handler(msg):
-        global logger
-        global connect
-        global logger
         data = {}
         msg_data = json.loads(msg.payload)
         try:
@@ -97,9 +94,10 @@ def run():
         with connect.cursor() as c:
             try:
                 c.execute(update_user, list(data.values()))
+                connect.commit()
             except (Exception, psycopg2.Error) as error:
+                connect.close()
                 logger.debug(f"Ошибка при обновлении данных пользователя {error}, data={data}")
-        connect.commit()
 
     def on_message(client, userdata, msg):
         global connect
